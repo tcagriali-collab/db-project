@@ -2,15 +2,15 @@
 
 **Ödev no:** Ödev 1     **Hafta:** 1-5     **Tarih:** 23 / 10 / 2026
 
-**Ad Soyad:** ______________________________  **Öğrenci No:** ______________
+**Ad Soyad:** Çağrı Ali Turhan  **Öğrenci No:** 202507131014
 
 **Program:** ☐ Yapay Zeka Operatörlüğü  ☒ Robotik ve Yapay Zeka
 
 **Kullandığım veritabanı:** ☐ `llm_ops`  ☒ `robot_fleet`
 
-**PR bağlantısı:** `https://github.com/` ______________________________________
+**PR bağlantısı:** https://github.com/tcagriali-collab/db-project/pull/1
 
-**Commit sayısı:** ______
+**Commit sayısı:** 4
 
 ---
 
