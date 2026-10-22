@@ -1,159 +1,147 @@
--- Ödev 1 - Bölüm 4: Gruplama ve NULL (Hafta 5 lab föyü, robot_fleet)
+-- Ödev 1 - Bölüm 4: Gruplama ve NULL (Hafta 5 lab föyü, llm_ops)
+-- Program: Yapay Zeka Operatörlüğü
 
--- Soru 1: Filoda kaç robot var?
-SELECT count(*) AS robot_sayisi
-FROM robots;
--- 10, yani filoda 10 robot kayıtlı; Bölüm 3 Soru 1'deki 10 satırla tutarlı.
+-- Soru 1: Kaç çağrı kaydedilmiş?
+SELECT count(*) AS cagri_sayisi
+FROM llm_calls;
+-- 12, yani 8-16 Ekim arasında uygulamaya 12 çağrı yapılmış.
 
--- Soru 2: Kaç robot görevde?
-SELECT count(*) AS aktif_robot
-FROM robots
-WHERE status = 'active';
--- 6, yani filonun %60'ı şu an çalışıyor, 4 robot şarjda, bakımda ya da kapalı.
+-- Soru 2: Kaç çağrı 2 saniyeden yavaş?
+SELECT count(*) AS yavas_cagri
+FROM llm_calls
+WHERE latency_ms > 2000;
+-- 5, yani çağrıların yaklaşık %40'ında kullanıcı 2 saniyeden fazla beklemiş.
 
--- Soru 3: Bütün bataryaların toplamı
-SELECT sum(battery_level) AS toplam_batarya
-FROM robots;
--- 381. sum() NULL'u atladığı için bu toplam 10 değil 9 robotun toplamı.
+-- Soru 3: Toplam maliyet ve toplam token
+SELECT sum(cost_usd) AS toplam_maliyet,
+       sum(prompt_tokens + completion_tokens) AS toplam_token
+FROM llm_calls;
+-- 0.0631 dolar | 14340 token. Maliyet 12 değil 11 çağrının toplamı:
+-- 11 numaralı çağrının faturası gelmediği için gerçek harcama bundan biraz fazla.
 
--- Soru 4: Ortalama batarya, bir ondalık
-SELECT round(avg(battery_level), 1) AS ort_batarya
-FROM robots;
--- 42.3, yani 381 / 9. Bölme 10'a değil 9'a yapıldı, Kartal-04 hesaba girmedi.
+-- Soru 4: Ortalama gecikme, bir ondalık
+SELECT round(avg(latency_ms), 1) AS ort_gecikme
+FROM llm_calls;
+-- 1848.3 ms, yani bir çağrı ortalama 1.8 saniye sürüyor. latency_ms'de boş yok, 12 çağrının hepsi hesaba girdi.
 
--- Soru 5: En düşük ve en yüksek batarya
-SELECT min(battery_level) AS en_dusuk,
-       max(battery_level) AS en_yuksek
-FROM robots;
--- 0 | 91. 0 olan Atlas-03 kapalı (offline) robot, yani bu bir hata değil gerçek bir boş batarya.
+-- Soru 5: En hızlı ve en yavaş çağrı
+SELECT min(latency_ms) AS en_hizli,
+       max(latency_ms) AS en_yavas
+FROM llm_calls;
+-- 380 | 4100. En yavaş çağrı en hızlıdan 10 kattan fazla uzun; ikisi farklı iş türü
+-- (llama ile classify, claude-sonnet ile code), yani gecikme modele ve işin büyüklüğüne bağlı.
 
--- Soru 6: Her durumda kaç robot var?
-SELECT status, count(*) AS robot_sayisi
-FROM robots
-GROUP BY status
-ORDER BY robot_sayisi DESC;
--- 4 satır döndü, çünkü tabloda 4 farklı durum var (active 6, charging 2, maintenance 1, offline 1).
--- Satırların toplamı 10, yani hiçbir robot dışarıda kalmadı.
+-- Soru 6: Her iş türünde kaç çağrı var?
+SELECT task_type, count(*) AS cagri_sayisi
+FROM llm_calls
+GROUP BY task_type
+ORDER BY cagri_sayisi DESC;
+-- 5 satır döndü, çünkü 5 farklı iş türü var. Toplamları 3+3+2+2+2 = 12, hiçbir çağrı dışarıda kalmadı.
 
--- Soru 7: Her model için robot sayısı ve ortalama batarya
-SELECT model,
-       count(*) AS robot_sayisi,
-       round(avg(battery_level), 1) AS ort_batarya
-FROM robots
-GROUP BY model
-ORDER BY model;
--- AMR-200: 3 robot, ort. 32.3 | AMR-300: 3 robot, ort. 37.0 | DRN-X1: 4 robot, ort. 57.7.
--- DRN-X1'in ortalaması 4 değil 3 robottan hesaplandı (Kartal-04 NULL), yani en iyi görünen model aslında eksik veriyle öne çıkıyor.
+-- Soru 7: Her model için çağrı sayısı ve toplam maliyet, pahalıdan ucuza
+SELECT model_name,
+       count(*) AS cagri_sayisi,
+       sum(cost_usd) AS toplam_maliyet
+FROM llm_calls
+GROUP BY model_name
+ORDER BY toplam_maliyet DESC;
+-- 7 satır döndü. claude-sonnet sadece 2 çağrıyla 0.0384 dolar harcamış, yani toplam maliyetin yarısından fazlası.
+-- gpt-4o 3 çağrı ama toplamı 0.0179: faturası gelmeyen 11 numaralı çağrı bu toplama girmedi.
 
--- Soru 8: Her bölgede, her durumdan kaç robot var?
-SELECT zone, status, count(*) AS robot_sayisi
-FROM robots
-GROUP BY zone, status
-ORDER BY zone, status;
--- 7 satır döndü. Beklemediğim satır: bölgesi boş (NULL) bir "active" satırı.
--- Bu Mars-03; henüz bir bölgeye atanmadığı halde görevde görünüyor.
+-- Soru 8: Her kullanıcının her iş türünden kaç çağrısı var?
+SELECT user_name, task_type, count(*) AS cagri_sayisi
+FROM llm_calls
+GROUP BY user_name, task_type
+ORDER BY user_name, task_type;
+-- 12 satır döndü. Beklemediğim satır en sondaki kullanıcısı boş (NULL) "chat" satırı:
+-- bu 12 numaralı çağrı, bir kişi değil anonim bir betik yapmış.
 
--- Soru 9: Birden fazla robotu olan modeller
-SELECT model, count(*) AS robot_sayisi
-FROM robots
-GROUP BY model
-HAVING count(*) > 1;
--- 3 satır döndü, yani üç modelin de birden fazla robotu var; HAVING hiçbir grubu elemedi.
+-- Soru 9: İkiden fazla çağrı almış modeller ("ikiden fazla" = 2'den büyük, yani en az 3)
+SELECT model_name, count(*) AS cagri_sayisi
+FROM llm_calls
+GROUP BY model_name
+HAVING count(*) > 2;
+-- 1 satır döndü: gpt-4o (3 çağrı). Diğer modeller en fazla 2 çağrı almış.
 
--- Soru 10: Sadece görevdeki robotlar; en az 2 robotu olan modeller ve ortalama batarya
-SELECT model,
-       count(*) AS aktif_robot,
-       round(avg(battery_level), 1) AS ort_batarya
-FROM robots
-WHERE status = 'active'
-GROUP BY model
+-- Soru 10: 500 ms'den yavaş çağrılar; en az 2 çağrısı olan modeller ve ortalama gecikme
+SELECT model_name,
+       count(*) AS cagri_sayisi,
+       round(avg(latency_ms), 1) AS ort_gecikme
+FROM llm_calls
+WHERE latency_ms > 500
+GROUP BY model_name
 HAVING count(*) >= 2;
--- 2 satır döndü: AMR-300 (3 robot, 37.0) ve DRN-X1 (2 robot, 54.5).
--- WHERE görevde olmayan 4 robotu gruplamadan önce eledi; HAVING ise
--- tek aktif robotu kalan AMR-200'ü (sadece Atlas-01) gruplamadan sonra eledi.
+-- 3 satır döndü: claude-sonnet 3650.0, gpt-4o 2383.3, claude-haiku 800.0.
+-- WHERE, gruplamadan önce 500 ms'den hızlı 2 çağrıyı (llama 380, gpt-4o-mini 450) eledi.
+-- HAVING, gruplamadan sonra tek çağrısı kalan gemini-pro, gemini-flash ve llama-3-8b'yi eledi.
 
 -- Soru 11: NULL avı
-SELECT count(*)              AS satir_sayisi,
-       count(name)           AS name_dolu,
-       count(model)          AS model_dolu,
-       count(status)         AS status_dolu,
-       count(battery_level)  AS batarya_dolu,
-       count(zone)           AS zone_dolu,
-       count(operator_name)  AS operator_dolu
-FROM robots;
--- 10 | 10 | 10 | 10 | 9 | 9 | 9.
--- battery_level, zone ve operator_name sütunlarında birer eksik var:
--- batarya Kartal-04'ün (sensör arızası), bölge ve operatör Mars-03'ün (henüz atanmadı).
+SELECT count(*)                  AS satir_sayisi,
+       count(model_name)         AS model_dolu,
+       count(user_name)          AS user_dolu,
+       count(task_type)          AS task_dolu,
+       count(prompt_tokens)      AS prompt_dolu,
+       count(completion_tokens)  AS completion_dolu,
+       count(latency_ms)         AS latency_dolu,
+       count(cost_usd)           AS cost_dolu,
+       count(created_at)         AS tarih_dolu
+FROM llm_calls;
+-- 12 | 12 | 11 | 12 | 12 | 12 | 12 | 11 | 12.
+-- İki sütunda birer eksik var: user_name (12 numaralı çağrı, anonim betik) ve cost_usd (11 numaralı çağrı, fatura gelmedi).
 
--- Soru 12: Bilgisi eksik olan robotlar (önce = NULL ile deneme)
-SELECT name, battery_level, zone, operator_name
-FROM robots
-WHERE battery_level = NULL
-   OR zone = NULL
-   OR operator_name = NULL;
--- 0 satır döndü. "= NULL" hiçbir zaman doğru olmuyor, sonuç her satır için "bilinmiyor" çıkıyor.
+-- Soru 12: Faturası gelmemiş çağrılar (önce = NULL ile deneme)
+SELECT id, model_name, user_name, cost_usd
+FROM llm_calls
+WHERE cost_usd = NULL;
+-- 0 satır döndü. "= NULL" hiçbir satır için doğru olmuyor, sonuç her zaman "bilinmiyor".
 
 -- Soru 12: Doğru hali, IS NULL ile
-SELECT name, battery_level, zone, operator_name
-FROM robots
-WHERE battery_level IS NULL
-   OR zone IS NULL
-   OR operator_name IS NULL;
--- 2 satır döndü: Kartal-04 ve Mars-03. Soru 11'deki üç eksik bu iki robota ait.
+SELECT id, model_name, user_name, cost_usd
+FROM llm_calls
+WHERE cost_usd IS NULL;
+-- 1 satır döndü: 11 numaralı çağrı (gpt-4o, Deniz). Soru 11'deki cost eksikliğiyle tutarlı.
 
 -- Soru 13: İki ortalama yan yana
-SELECT round(avg(battery_level), 1)              AS bosu_atlayarak,
-       round(avg(coalesce(battery_level, 0)), 1) AS bosu_sifir_sayarak
-FROM robots;
--- 42.3 | 38.1, yani fark 4.2 puan.
--- Bu veri için 42.3 daha dürüst: Kartal-04'ün bataryası 0 değil, sadece sensörü bozuk olduğu için bilinmiyor.
--- Ona 0 demek, olmayan bir boş bataryayı rapora eklemek olur. Ama raporda "9 robot üzerinden" diye belirtmek gerekir.
+SELECT round(avg(cost_usd), 5)              AS bosu_atlayarak,
+       round(avg(coalesce(cost_usd, 0)), 5) AS bosu_sifir_sayarak
+FROM llm_calls;
+-- 0.00574 | 0.00526, fark yaklaşık 0.0005 dolar (yaklaşık %8).
+-- Bu veri için boşu atlayan ortalama daha dürüst: 11 numaralı çağrı bedava değil, faturası henüz gelmedi.
+-- Üstelik pahalı bir model (gpt-4o) ile yapılmış, ona 0 demek ortalamayı yapay olarak düşürür.
+-- Raporda "11 çağrı üzerinden, 1 fatura bekleniyor" diye belirtmek gerekir.
 
 -- Soru 13 (ek): Kayıp kayıtlar
-SELECT count(*) AS elli_alti
-FROM robots
-WHERE battery_level < 50;
--- 5
-SELECT count(*) AS elli_ve_ustu
-FROM robots
-WHERE battery_level >= 50;
--- 4, yani 5 + 4 = 9, 10 değil. Bir robot (Kartal-04) iki koşula da girmedi,
--- çünkü NULL hem "< 50" hem ">= 50" testinde "bilinmiyor" sonucunu veriyor.
+SELECT count(*) AS ucuz
+FROM llm_calls
+WHERE cost_usd < 0.005;
+-- 7
+SELECT count(*) AS pahali
+FROM llm_calls
+WHERE cost_usd >= 0.005;
+-- 4, yani 7 + 4 = 11, 12 değil. Faturası gelmeyen 11 numaralı çağrı iki koşula da girmedi,
+-- çünkü NULL hem "< 0.005" hem ">= 0.005" testinde "bilinmiyor" sonucunu veriyor.
 
--- Soru 14: Operatörleri işe giriş yılına göre say
-SELECT extract(YEAR FROM hired_at) AS giris_yili,
-       count(*) AS operator_sayisi
-FROM operators
-GROUP BY giris_yili
-ORDER BY giris_yili;
--- 2023: 1 | 2024: 3 | 2025: 4 | 2026: 2. İşe alım 2025'te zirve yapmış,
--- yani operatörlerin yarıdan fazlası (6/10) son iki yılda gelmiş.
+-- Soru 14: Günlük kullanım raporu
+SELECT created_at::date AS gun,
+       count(*) AS cagri_sayisi,
+       sum(cost_usd) AS toplam_maliyet
+FROM llm_calls
+GROUP BY gun
+ORDER BY gun;
+-- 6 satır döndü. En çok çağrı 16 Ekim'de (5 çağrı), ama o günün maliyeti sadece 0.0053 dolar,
+-- 2 çağrılık 15 Ekim'in (0.0246) beşte biri. İki sebebi var: o gün çoğunlukla ucuz modeller
+-- (llama, gpt-4o-mini, claude-haiku) kullanılmış ve pahalı gpt-4o çağrısının (11) faturası henüz gelmemiş.
 
--- Soru 15: Bataryaya göre kategori
+-- Soru 15: Gecikmeye göre kategori
 SELECT CASE
-           WHEN battery_level IS NULL THEN 'Bilinmiyor'
-           WHEN battery_level < 20    THEN 'Kritik'
-           WHEN battery_level < 60    THEN 'Düşük'
-           ELSE 'Normal'
+           WHEN latency_ms < 1000 THEN 'Hızlı'
+           WHEN latency_ms < 2500 THEN 'Orta'
+           ELSE 'Yavaş'
        END AS kategori,
-       count(*) AS robot_sayisi
-FROM robots
+       count(*) AS cagri_sayisi,
+       round(avg(latency_ms), 1) AS ort_gecikme
+FROM llm_calls
 GROUP BY kategori
-ORDER BY robot_sayisi DESC;
--- Kritik 4, Düşük 2, Normal 3, Bilinmiyor 1. Filonun 4 robotu 20'nin altında,
--- bunlardan Mars-02 (9) ve Kartal-01 (18) hâlâ görevde, yani yakında duracaklar.
-
--- Soru 15 (ek): IS NULL satırı en sona taşınınca
-SELECT CASE
-           WHEN battery_level < 20    THEN 'Kritik'
-           WHEN battery_level < 60    THEN 'Düşük'
-           WHEN battery_level >= 60   THEN 'Normal'
-           WHEN battery_level IS NULL THEN 'Bilinmiyor'
-       END AS kategori,
-       count(*) AS robot_sayisi
-FROM robots
-GROUP BY kategori
-ORDER BY robot_sayisi DESC;
--- Sonuç değişmedi: Kartal-04 yine "Bilinmiyor"a düştü. Çünkü NULL ile yapılan
--- her karşılaştırma doğru olmuyor, CASE ilk üç satırı atlayıp IS NULL'a ulaşıyor.
--- Ama son satırı "ELSE 'Normal'" yazsaydım, Kartal-04 yanlışlıkla Normal'e düşerdi.
+ORDER BY ort_gecikme;
+-- Hızlı 4 (607.5 ms), Orta 4 (1775.0 ms), Yavaş 4 (3162.5 ms). Çağrılar üç kategoriye eşit dağılmış.
+-- Yavaş grubun ortalaması hızlı grubun 5 katı; 4 yavaş çağrının 2'si gpt-4o, 2'si claude-sonnet, yani en pahalı iki model aynı zamanda en yavaşları.

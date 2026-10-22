@@ -1,112 +1,119 @@
--- Ödev 1 - Bölüm 3: SELECT ve WHERE (Hafta 4 lab föyü, robot_fleet)
+-- Ödev 1 - Bölüm 3: SELECT ve WHERE (Hafta 4 lab föyü, llm_ops)
+-- Program: Yapay Zeka Operatörlüğü
 
--- Soru 1: Bütün robotların adı ve modeli
-SELECT name, model
-FROM robots;
--- 10 satır döndü.
+-- Soru 1: Bütün çağrıların id'si ve model adı
+SELECT id, model_name
+FROM llm_calls;
+-- 12 satır döndü.
 
--- Soru 2: Robot adı ve eksik şarj miktarı (100 - batarya)
-SELECT name AS robot,
-       100 - battery_level AS missing
-FROM robots;
--- 10 satır döndü. Kartal-04'ün bataryası NULL olduğu için missing de NULL çıktı.
+-- Soru 2: Model adı ve toplam token sayısı
+SELECT model_name AS model,
+       prompt_tokens + completion_tokens AS total_tokens
+FROM llm_calls;
+-- 12 satır döndü.
 
--- Soru 3: Bataryası 50'nin üstündeki robotlar
-SELECT name, battery_level
-FROM robots
-WHERE battery_level > 50;
--- 4 satır döndü.
+-- Soru 3: Gecikmesi 2 saniyeyi aşan çağrılar (sütun milisaniye, 2 sn = 2000 ms)
+SELECT id, model_name, latency_ms
+FROM llm_calls
+WHERE latency_ms > 2000;
+-- 5 satır döndü. "> 2" yazsaydım 12 satırın hepsi gelirdi.
 
--- Soru 4: Bakımdaki robotlar
-SELECT name, status
-FROM robots
-WHERE status = 'maintenance';
--- 1 satır döndü.
-
--- Soru 5: Görevde olmayan robotlar
-SELECT name, status
-FROM robots
-WHERE status <> 'active';
--- 4 satır döndü.
-
--- Soru 6: AMR-300 modelinde olup bataryası 40'ın üstündeki robotlar
-SELECT name, model, battery_level
-FROM robots
-WHERE model = 'AMR-300'
-  AND battery_level > 40;
--- 2 satır döndü.
-
--- Soru 7: Şarjda veya bakımda olan, bataryası 50'nin altındaki robotlar
-SELECT name, status, battery_level
-FROM robots
-WHERE (status = 'charging' OR status = 'maintenance')
-  AND battery_level < 50;
--- 1 satır döndü.
-
--- Soru 7 (parantezsiz deneme, YANLIŞ hali):
-SELECT name, status, battery_level
-FROM robots
-WHERE status = 'charging' OR status = 'maintenance'
-  AND battery_level < 50;
--- 2 satır döndü. AND, OR'dan önce çalıştığı için sorgu
--- "charging OR (maintenance AND < 50)" olarak okundu;
--- bataryası bilinmeyen Kartal-04 de şarjda olduğu için listeye girdi.
-
--- Soru 8: Bataryası 15 ile 50 arasındaki robotlar (uçlar dahil)
-SELECT name, battery_level
-FROM robots
-WHERE battery_level BETWEEN 15 AND 50;
+-- Soru 4: Ece'nin yaptığı çağrılar
+SELECT id, model_name, task_type
+FROM llm_calls
+WHERE user_name = 'Ece';
 -- 3 satır döndü.
 
--- Soru 9: Depo A veya Depo B'de olmayan robotlar
-SELECT name, zone
-FROM robots
-WHERE zone NOT IN ('Depo A', 'Depo B');
--- 5 satır döndü. Bölgesi NULL olan Mars-03 gelmedi, çünkü NULL ile
--- yapılan karşılaştırmanın sonucu "bilinmiyor" oluyor.
+-- Soru 5: Sohbet (chat) dışındaki çağrılar
+SELECT id, task_type
+FROM llm_calls
+WHERE task_type <> 'chat';
+-- 9 satır döndü (12 çağrının 3'ü chat).
 
--- Soru 10: Adı "kartal" ile başlayan robotlar (büyük/küçük harf fark etmeksizin)
-SELECT name
-FROM robots
-WHERE name ILIKE 'kartal%';
--- 4 satır döndü. LIKE ile denediğimde 0 satır geldi, çünkü adlar büyük K ile yazılmış.
+-- Soru 6: Adı claude ile başlayan modellere yapılan, 1 saniyeden yavaş çağrılar
+SELECT id, model_name, latency_ms
+FROM llm_calls
+WHERE model_name LIKE 'claude%'
+  AND latency_ms > 1000;
+-- 2 satır döndü. claude-haiku çağrıları (900 ve 700 ms) 1 saniyenin altında kaldı.
 
--- Soru 11: Önce modele (A-Z), model içinde bataryaya (yüksekten düşüğe) göre
-SELECT name, model, battery_level
-FROM robots
-ORDER BY model ASC, battery_level DESC;
--- 10 satır döndü. DESC sıralamada NULL en üstte çıktı (Kartal-04, DRN-X1 grubunun başında).
+-- Soru 7: Kod veya çeviri işi olan, maliyeti 0.01 doları aşan çağrılar
+SELECT id, task_type, cost_usd
+FROM llm_calls
+WHERE (task_type = 'code' OR task_type = 'translate')
+  AND cost_usd > 0.01;
+-- 3 satır döndü.
 
--- Soru 12: En dolu 3 robot
-SELECT name, battery_level
-FROM robots
-WHERE battery_level IS NOT NULL
-ORDER BY battery_level DESC
-LIMIT 3;
--- 3 satır döndü. WHERE koymasaydım NULL olan Kartal-04 en üstte gelirdi.
+-- Soru 7 (parantezsiz deneme):
+SELECT id, task_type, cost_usd
+FROM llm_calls
+WHERE task_type = 'code' OR task_type = 'translate'
+  AND cost_usd > 0.01;
+-- 3 satır döndü, fark 0. Parantezsiz sorgu "code OR (translate AND > 0.01)" olarak okunuyor,
+-- yani code çağrılarında maliyete bakılmıyor. Bu veride iki code çağrısı da zaten 0.01'in
+-- üstünde olduğu için sonuç değişmedi. Sorgu yine de yanlış: ucuz bir code çağrısı eklense listeye girerdi.
 
--- Soru 13: Filoda hangi bölgeler var?
-SELECT DISTINCT zone
-FROM robots
-ORDER BY zone;
--- 6 satır döndü (5 bölge + atanmamış robot için bir NULL satırı).
+-- Soru 8: Gecikmesi 500 ile 1500 ms arasındaki çağrılar
+SELECT id, model_name, latency_ms
+FROM llm_calls
+WHERE latency_ms BETWEEN 500 AND 1500;
+-- 3 satır döndü.
 
--- Soru 14: Operatör adları, COLLATE olmadan
-SELECT operator_name
-FROM operators
-ORDER BY operator_name;
--- 10 satır döndü. Ç, İ, Ş ile başlayan adlar (Çağla, İsmail, Şule) en sona düştü.
-
--- Soru 14: Operatör adları, Türkçe alfabe sırasıyla
-SELECT operator_name
-FROM operators
-ORDER BY operator_name COLLATE "tr-TR-x-icu";
--- 10 satır döndü. Çağla Can'dan sonra, İsmail Emre'den sonra, Şule Kerem'den sonra yerine geldi.
-
--- Soru 15: Dış Alan veya Depo B'deki, görevdeki robotlar, en düşük bataryadan başlayarak
-SELECT name, zone, battery_level
-FROM robots
-WHERE zone IN ('Dış Alan', 'Depo B')
-  AND status = 'active'
-ORDER BY battery_level ASC;
+-- Soru 9: gpt ailesine yapılan çağrılar
+SELECT id, model_name
+FROM llm_calls
+WHERE model_name IN ('gpt-4o', 'gpt-4o-mini');
 -- 4 satır döndü.
+
+-- Soru 10: Model adında "mini" geçen çağrılar
+SELECT id, model_name
+FROM llm_calls
+WHERE model_name LIKE '%mini%';
+-- 3 satır döndü. 1 satır bekliyordum (gpt-4o-mini), ama "gemini" kelimesinin
+-- içinde de "mini" geçtiği için gemini-flash ve gemini-pro da geldi.
+
+-- Soru 11: Önce kullanıcıya, kullanıcı içinde maliyete (pahalıdan ucuza) göre
+SELECT user_name, id, cost_usd
+FROM llm_calls
+ORDER BY user_name ASC, cost_usd DESC;
+-- 12 satır döndü. Kullanıcısı NULL olan 12 numaralı çağrı en sona düştü;
+-- Deniz'in maliyeti NULL olan çağrısı ise DESC sıralamada en üste çıktı.
+
+-- Soru 12: En pahalı 3 çağrı
+SELECT id, model_name, cost_usd
+FROM llm_calls
+WHERE cost_usd IS NOT NULL
+ORDER BY cost_usd DESC
+LIMIT 3;
+-- 3 satır döndü. WHERE koymasaydım faturası gelmemiş 11 numaralı çağrı en üstte çıkardı.
+
+-- Soru 13: Hangi iş türleri var?
+SELECT DISTINCT task_type
+FROM llm_calls
+ORDER BY task_type;
+-- 5 satır döndü.
+
+-- Soru 14: Kullanıcı adları, tekrarsız, COLLATE olmadan
+SELECT DISTINCT user_name
+FROM llm_calls
+ORDER BY user_name;
+-- 6 satır döndü (5 kullanıcı + anonim betik için NULL).
+
+-- Soru 14: Türkçe alfabe sırasıyla
+-- İlk denemem: SELECT DISTINCT user_name ... ORDER BY user_name COLLATE "tr-TR-x-icu";
+-- Hata: "for SELECT DISTINCT, ORDER BY expressions must appear in select list".
+-- COLLATE eklenince ORDER BY'daki ifade SELECT'tekinden farklı sayılıyor, bu yüzden COLLATE'i SELECT'e taşıdım.
+SELECT DISTINCT user_name COLLATE "tr-TR-x-icu" AS user_name
+FROM llm_calls
+ORDER BY user_name;
+-- 6 satır döndü. Hiçbir isim yer değiştirmedi, çünkü hiçbir isim Ç, Ğ, İ, Ö, Ş, Ü ile başlamıyor.
+-- Oğuz'daki "ğ" ikinci harf olduğu için O'dan sonra karşılaştırmaya gerek kalmıyor.
+
+-- Soru 15: 14 Ekim'den sonra yapılan, 1 saniyeden yavaş çağrılar, en yavaştan başlayarak
+SELECT id, model_name, latency_ms
+FROM llm_calls
+WHERE created_at >= '2026-10-15'
+  AND latency_ms > 1000
+ORDER BY latency_ms DESC;
+-- 5 satır döndü. "14 Ekim'den sonra"yı 15 Ekim ve sonrası olarak aldım.
+-- '2026-10-14' yazsaydım 14 Ekim saat 11:47'deki 4 numaralı çağrı da gelirdi (6 satır).
